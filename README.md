@@ -1,32 +1,121 @@
 # Tung Tung Sahur OpenGL Visualization
 
-Interactive C++ OpenGL viewer for `TungTungTungSahur.obj`.
+An interactive C++ OpenGL program for viewing and manipulating the `TungTungTungSahur.obj` 3D model.
+This project demonstrates core OpenGL concepts including model loading, VAO/VBO usage, matrix transformations,
+and Phong shading with multiple material presets.
 
-## Build
+## Table of Contents
+- [Features](#features)
+- [Requirements](#requirements)
+- [Getting Started](#getting-started)
+  - [Building](#building)
+  - [Running](#running)
+- [Controls](#controls)
+- [Implementation Details](#implementation-details)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
 
-```sh
+## Features
+
+- Loads and displays a 3D model from an OBJ file (`TungTungTungSahur.obj`)
+- Uses Vertex Array Objects (VAO) and Vertex Buffer Objects (VBO) for efficient GPU rendering
+- Implements separate model, view, and projection matrix transformations
+- Phong lighting model with ambient, diffuse, and specular components
+- Four interchangeable material presets (editable in `src/main.cpp`)
+- Interactive camera controls:
+  - Rotate orbit (left/right)
+  - Tilt pitch (up/down)
+  - Zoom in/out
+  - Reset to default view
+- Floor grid visualization for spatial reference
+- Depth testing, face culling, multisampling, and blending enabled
+
+## Requirements
+
+- A C++17 compatible compiler (e.g., GCC, Clang)
+- OpenGL 3.3 or higher
+- GLFW 3.x for window and input handling
+- GLEW for OpenGL extension loading
+- Make (for building via the provided Makefile)
+
+On Ubuntu/Debian, install dependencies with:
+```bash
+sudo apt-get install libglfw3-dev libglew-dev
+```
+
+## Getting Started
+
+### Building
+
+Clone the repository and build the executable using the provided Makefile:
+
+```bash
+git clone <repository-url>
+cd opengl/tung-tung-sahur
 make
 ```
 
-## Run
+This will compile the source and produce an executable named `tung_tung_sahur`.
 
-```sh
+### Running
+
+Run the executable from the project root directory (where `TungTungTungSahur.obj` is located):
+
+```bash
 make run
+# or directly:
+./tung_tung_sahur
 ```
+
+Ensure the OBJ file is in the same directory as the executable, or adjust the path in `src/main.cpp`.
 
 ## Controls
 
-- `A` / `D`: rotate camera
-- `W` / `S`: tilt camera
-- `Q` / `E`: zoom
-- `1` - `4`: switch Phong material presets
-- `R`: reset camera
-- `Esc`: quit
+| Key | Action |
+|-----|--------|
+| `A` | Rotate camera left (orbit) |
+| `D` | Rotate camera right (orbit) |
+| `W` | Tilt camera up |
+| `S` | Tilt camera down |
+| `Q` | Zoom out (increase distance) |
+| `E` | Zoom in (decrease distance) |
+| `1` | Material preset 1 (brown/orange) |
+| `2` | Material preset 2 (yellow/gold) |
+| `3` | Material preset 3 (blue/cyan) |
+| `4` | Material preset 4 (gray/blue) |
+| `R` | Reset camera to default position |
+| `Esc` | Exit the application |
 
-## Implemented OpenGL Requirements
+## Implementation Details
 
-- OBJ model loading from `TungTungTungSahur.obj`
-- VAO/VBO upload for mesh vertices and normals
-- Separate model, view, and projection matrix setup
-- Vertex and fragment shaders using the Phong lighting model
-- Multiple material presets with ambient, diffuse, specular, and shininess values
+### Core Components
+
+- **Math Structures**: Custom `Vec3` and `Mat4` classes for vector and matrix operations.
+- **Model Loading**: `loadObj()` function parses OBJ files, extracts vertices and normals, computes model center and scale.
+- **Shaders**:
+  - Vertex Shader: Transforms vertices using model/view/projection matrices, passes world position, normal, and height to fragment shader.
+  - Fragment Shader: Implements Phong lighting with:
+    - Ambient, diffuse, and specular components
+    - Rim lighting effect
+    - Height-based patterned diffuse (sinusoidal bands)
+- **Rendering**:
+  - VAO/VBO setup for both the model and a floor grid
+  - Separate shader programs for mesh and grid rendering
+  - Depth testing, face culling, multisampling, and alpha blending enabled
+- **Input Handling**: GLFW-based camera orbit controls with pitch and distance clamping.
+
+### Key Files
+
+- `src/main.cpp`: Contains all application logic (model loading, shaders, rendering loop, input handling).
+- `TungTungTungSahur.obj`: The 3D model file (over 1MB, not shown in repo if large).
+- `Makefile`: Simple build script using g++ with GLFW and GLEW linking.
+- `report.*`: LaTeX-generated documentation (likely from an academic assignment).
+
+## Acknowledgments
+
+This project appears to be based on an academic assignment for an OpenGL/computer graphics course.
+The model `TungTungTungSahur.obj` is likely a reference to the "Tung Tung Sahur" internet meme.
+
+## License
+
+No explicit license is specified in the repository. Please check with the author for usage rights.
