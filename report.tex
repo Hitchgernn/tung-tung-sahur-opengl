@@ -1,0 +1,762 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{amsmath}
+
+\graphicspath{{screenshots/}{assets/}}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    columns=fullflexible,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{teal}
+}
+
+\newcommand{\headerlogo}{
+    \IfFileExists{assets/logo-ugm.png}{
+        \includegraphics[width=2.2cm]{assets/logo-ugm.png}
+    }{
+        \IfFileExists{logo-ugm.png}{
+            \includegraphics[width=2.2cm]{logo-ugm.png}
+        }{
+            \fbox{\begin{minipage}[c][2.2cm][c]{2.2cm}\centering Logo\end{minipage}}
+        }
+    }
+}
+
+\newcommand{\screenshotfigure}[3]{
+    \begin{figure}[H]
+        \centering
+        \IfFileExists{screenshots/#1}{
+            \includegraphics[width=0.88\linewidth]{#1}
+        }{
+            \fbox{
+                \begin{minipage}[c][0.30\textheight][c]{0.88\linewidth}
+                    \centering
+                    Placeholder screenshot: \texttt{screenshots/#1}\\
+                    Bagian ini diisi menggunakan screenshot dari program yang dijalankan.
+                \end{minipage}
+            }
+        }
+        \caption{#2}
+        \label{#3}
+    \end{figure}
+}
+
+\begin{document}
+
+\noindent
+\begin{minipage}{0.16\linewidth}
+    \headerlogo
+\end{minipage}
+\begin{minipage}{0.80\linewidth}
+    \centering
+    {\Large \textbf{Universitas Gadjah Mada}}\\[0.2cm]
+    {\large Departemen Teknik Elektro dan Teknologi Informasi}
+\end{minipage}
+
+\vspace{0.35cm}
+\hrule
+\vspace{0.55cm}
+
+\begin{center}
+    {\Large \textbf{Laporan Proyek OpenGL}}\\[0.15cm]
+    {\large Visualisasi Model Tung Tung Sahur dengan Phong Shading}
+\end{center}
+
+\vspace{0.35cm}
+
+\noindent\textbf{Anggota Kelompok}
+
+\vspace{0.15cm}
+
+\begin{tabularx}{\linewidth}{|c|X|X|}
+    \hline
+    \textbf{No.} & \textbf{Nama} & \textbf{NIM} \\
+    \hline
+    1 & Nama Anggota 1 & NIM Anggota 1 \\
+    \hline
+    2 & Nama Anggota 2 & NIM Anggota 2 \\
+    \hline
+    3 & Nama Anggota 3 & NIM Anggota 3 \\
+    \hline
+\end{tabularx}
+
+\vspace{0.5cm}
+
+\section{Objektif Tugas}
+
+Objektif dari tugas ini adalah membuat program visualisasi 3D menggunakan
+OpenGL yang memenuhi tiga bagian utama dari spesifikasi tugas, yaitu:
+
+\begin{enumerate}
+    \item Mengimplementasikan vertex shader dan fragment shader dengan model
+    pencahayaan Phong.
+    \item Membuat fungsi untuk memuat model 3D ke dalam scene, lalu
+    menggunakan VBO dan VAO agar data model dapat diproses oleh GPU.
+    \item Membuat pengaturan matriks model, view, dan projection secara
+    terpisah.
+\end{enumerate}
+
+Rencana implementasi dilakukan secara bertahap. Pertama, program menyiapkan
+window OpenGL, memuat file model \texttt{TungTungTungSahur.obj}, dan menyimpan
+data posisi serta normal vertex. Kedua, data tersebut dikirim ke GPU memakai
+VAO dan VBO. Ketiga, dibuat shader untuk menghitung warna objek menggunakan
+komponen ambient, diffuse, dan specular dari model Phong. Terakhir, program
+memisahkan perhitungan transformasi ke dalam fungsi model matrix, view matrix,
+dan projection matrix agar alur rendering lebih jelas.
+
+\section{Setup}
+
+Program ditulis menggunakan bahasa C++ dan dibangun melalui \texttt{Makefile}.
+Library yang digunakan adalah:
+
+\begin{itemize}
+    \item \textbf{OpenGL}: API utama untuk rendering grafis 3D.
+    \item \textbf{GLFW}: digunakan untuk membuat window, membuat OpenGL context,
+    dan membaca input keyboard.
+    \item \textbf{GLEW}: digunakan untuk memuat fungsi-fungsi OpenGL modern
+    setelah context dibuat.
+    \item \textbf{GL}: library OpenGL sistem yang ditautkan saat proses build.
+\end{itemize}
+
+Konfigurasi build berada di file \texttt{Makefile}. Program dikompilasi dengan
+standar C++17 dan dependency GLFW/GLEW diambil dari \texttt{pkg-config}.
+
+\begin{lstlisting}[language=make]
+CXXFLAGS := -std=c++17 -Wall -Wextra -O2
+CPPFLAGS := $(shell pkg-config --cflags glfw3 glew)
+LDLIBS := $(shell pkg-config --libs glfw3 glew) -lGL -lm
+\end{lstlisting}
+
+Program dapat dibangun dan dijalankan dengan perintah:
+
+\begin{lstlisting}[language=bash]
+make
+make run
+\end{lstlisting}
+
+\section{Formula Matematika yang Digunakan}
+
+Bagian ini menjelaskan rumus matematika yang langsung berkaitan dengan
+implementasi program. Rumus-rumus ini digunakan pada perhitungan vektor,
+pemuatan normal model, kamera, transformasi matriks, dan pencahayaan Phong.
+
+\subsection{Operasi Vektor}
+
+Program menggunakan dot product untuk menghitung kedekatan arah dua vektor,
+misalnya antara normal permukaan dan arah cahaya.
+
+\begin{equation}
+    \mathbf{a} \cdot \mathbf{b}
+    =
+    a_x b_x + a_y b_y + a_z b_z
+\end{equation}
+
+Cross product digunakan untuk mendapatkan normal face ketika file OBJ tidak
+menyediakan normal. Jika suatu segitiga memiliki titik
+$\mathbf{p}_0$, $\mathbf{p}_1$, dan $\mathbf{p}_2$, maka normal face dihitung
+dengan:
+
+\begin{equation}
+    \mathbf{n}_{face}
+    =
+    \frac{(\mathbf{p}_1 - \mathbf{p}_0) \times
+    (\mathbf{p}_2 - \mathbf{p}_0)}
+    {\left\|(\mathbf{p}_1 - \mathbf{p}_0) \times
+    (\mathbf{p}_2 - \mathbf{p}_0)\right\|}
+\end{equation}
+
+Normalisasi vektor dilakukan agar panjang vektor menjadi satu:
+
+\begin{equation}
+    \hat{\mathbf{v}}
+    =
+    \frac{\mathbf{v}}{\|\mathbf{v}\|}
+    =
+    \frac{\mathbf{v}}{\sqrt{v_x^2 + v_y^2 + v_z^2}}
+\end{equation}
+
+\subsection{Bounding Box, Center, dan Scale Model}
+
+Loader OBJ menghitung titik minimum dan maksimum dari semua vertex untuk
+membuat bounding box model. Titik tengah model dihitung dengan:
+
+\begin{equation}
+    \mathbf{c}
+    =
+    \frac{\mathbf{p}_{min} + \mathbf{p}_{max}}{2}
+\end{equation}
+
+Ukuran terbesar model dihitung dari extent:
+
+\begin{equation}
+    \mathbf{e} = \mathbf{p}_{max} - \mathbf{p}_{min}
+\end{equation}
+
+\begin{equation}
+    e_{max} = \max(e_x, e_y, e_z)
+\end{equation}
+
+Skala model pada program dibuat agar objek memiliki ukuran visual yang sesuai
+di scene:
+
+\begin{equation}
+    s =
+    \begin{cases}
+        \frac{2.8}{e_{max}}, & e_{max} > 0 \\
+        1, & e_{max} = 0
+    \end{cases}
+\end{equation}
+
+\subsection{Model Matrix}
+
+Model matrix digunakan untuk memindahkan model ke pusat scene dan mengubah
+ukurannya. Implementasi program menggunakan translasi ke arah negatif center
+model, kemudian scaling:
+
+\begin{equation}
+    M = S(s) \cdot T(-\mathbf{c})
+\end{equation}
+
+Posisi vertex dalam koordinat dunia dihitung dengan:
+
+\begin{equation}
+    \mathbf{p}_{world} = M \cdot
+    \begin{bmatrix}
+        p_x \\ p_y \\ p_z \\ 1
+    \end{bmatrix}
+\end{equation}
+
+\subsection{View Matrix}
+
+View matrix dibuat dengan metode \texttt{lookAt}. Jika posisi kamera adalah
+$\mathbf{eye}$, target adalah $\mathbf{center}$, dan arah atas adalah
+$\mathbf{up}$, maka basis kamera dihitung sebagai:
+
+\begin{equation}
+    \mathbf{f} =
+    \frac{\mathbf{center} - \mathbf{eye}}
+    {\|\mathbf{center} - \mathbf{eye}\|}
+\end{equation}
+
+\begin{equation}
+    \mathbf{s} =
+    \frac{\mathbf{f} \times \mathbf{up}}
+    {\|\mathbf{f} \times \mathbf{up}\|}
+\end{equation}
+
+\begin{equation}
+    \mathbf{u} = \mathbf{s} \times \mathbf{f}
+\end{equation}
+
+Berdasarkan basis tersebut, matriks view menyusun orientasi kamera dan translasi
+berdasarkan posisi kamera:
+
+\begin{equation}
+    V =
+    \begin{bmatrix}
+        s_x & u_x & -f_x & 0 \\
+        s_y & u_y & -f_y & 0 \\
+        s_z & u_z & -f_z & 0 \\
+        -\mathbf{s}\cdot\mathbf{eye} &
+        -\mathbf{u}\cdot\mathbf{eye} &
+        \mathbf{f}\cdot\mathbf{eye} & 1
+    \end{bmatrix}
+\end{equation}
+
+\subsection{Projection Matrix}
+
+Projection matrix menggunakan perspektif. Dengan field of view vertikal
+$fovy$, aspect ratio $a$, near plane $n$, dan far plane $f$, nilai dasar
+perspektif adalah:
+
+\begin{equation}
+    q = \frac{1}{\tan\left(\frac{fovy}{2}\right)}
+\end{equation}
+
+Matriks projection yang digunakan program adalah:
+
+\begin{equation}
+    P =
+    \begin{bmatrix}
+        \frac{q}{a} & 0 & 0 & 0 \\
+        0 & q & 0 & 0 \\
+        0 & 0 & \frac{f+n}{n-f} & -1 \\
+        0 & 0 & \frac{2fn}{n-f} & 0
+    \end{bmatrix}
+\end{equation}
+
+Urutan transformasi akhir pada vertex shader adalah:
+
+\begin{equation}
+    \mathbf{p}_{clip} = P \cdot V \cdot M \cdot
+    \begin{bmatrix}
+        p_x \\ p_y \\ p_z \\ 1
+    \end{bmatrix}
+\end{equation}
+
+\subsection{Normal Matrix}
+
+Normal tidak cukup hanya dikalikan dengan model matrix biasa, terutama jika
+ada scaling. Oleh karena itu vertex shader menggunakan normal matrix:
+
+\begin{equation}
+    N = \left(M_{3 \times 3}^{-1}\right)^T
+\end{equation}
+
+Normal dunia dihitung dengan:
+
+\begin{equation}
+    \mathbf{n}_{world} =
+    \frac{N \cdot \mathbf{n}_{model}}
+    {\|N \cdot \mathbf{n}_{model}\|}
+\end{equation}
+
+\subsection{Phong Lighting}
+
+Pencahayaan Phong pada fragment shader terdiri dari ambient, diffuse, dan
+specular. Arah cahaya dan arah pandang dihitung sebagai:
+
+\begin{equation}
+    \mathbf{l} =
+    \frac{\mathbf{p}_{light} - \mathbf{p}_{world}}
+    {\|\mathbf{p}_{light} - \mathbf{p}_{world}\|}
+\end{equation}
+
+\begin{equation}
+    \mathbf{v} =
+    \frac{\mathbf{p}_{camera} - \mathbf{p}_{world}}
+    {\|\mathbf{p}_{camera} - \mathbf{p}_{world}\|}
+\end{equation}
+
+Komponen diffuse:
+
+\begin{equation}
+    I_d = \max(\mathbf{n} \cdot \mathbf{l}, 0)
+\end{equation}
+
+Arah refleksi cahaya:
+
+\begin{equation}
+    \mathbf{r} =
+    2(\mathbf{n}\cdot\mathbf{l})\mathbf{n} - \mathbf{l}
+\end{equation}
+
+Komponen specular:
+
+\begin{equation}
+    I_s =
+    \begin{cases}
+        \max(\mathbf{v}\cdot\mathbf{r}, 0)^\alpha, & I_d > 0 \\
+        0, & I_d = 0
+    \end{cases}
+\end{equation}
+
+dengan $\alpha$ sebagai nilai \texttt{shininess}. Warna akhir fragment dihitung
+dengan:
+
+\begin{equation}
+    \mathbf{C}_{final}
+    =
+    \mathbf{L}_{ambient}\mathbf{M}_{ambient}
+    +
+    I_d\mathbf{L}_{diffuse}\mathbf{M}_{diffuse}
+    +
+    I_s\mathbf{L}_{specular}\mathbf{M}_{specular}
+    +
+    \mathbf{C}_{rim}
+\end{equation}
+
+\subsection{Variasi Warna Berdasarkan Tinggi}
+
+Eksperimen fragment shader menambahkan variasi warna berdasarkan tinggi vertex.
+Rumus yang dipakai adalah:
+
+\begin{equation}
+    b = 0.5 + 0.5\sin(18y)
+\end{equation}
+
+Nilai $b$ dipakai untuk mencampur intensitas warna diffuse:
+
+\begin{equation}
+    \mathbf{M}_{diffuse}' =
+    \mathbf{M}_{diffuse} \cdot
+    \left(0.78(1-b) + 1.18b\right)
+\end{equation}
+
+
+\section{Implementasi}
+
+\subsection{Struktur File}
+
+File utama proyek adalah:
+
+\begin{itemize}
+    \item \texttt{src/main.cpp}: berisi seluruh kode program, mulai dari
+    struktur data, loader OBJ, shader, setup OpenGL, setup VAO/VBO, input, dan
+    render loop.
+    \item \texttt{TungTungTungSahur.obj}: file model 3D yang dimuat ke scene.
+    \item \texttt{Makefile}: konfigurasi kompilasi dan perintah menjalankan
+    program.
+    \item \texttt{README.md}: dokumentasi singkat build, run, dan kontrol.
+    \item \texttt{report.tex}: file laporan LaTeX ini.
+\end{itemize}
+
+\subsection{Struktur Data Dasar}
+
+Program mendefinisikan beberapa struktur data sederhana di
+\texttt{src/main.cpp}. Struktur \texttt{Vec3} digunakan untuk menyimpan vektor
+3D, \texttt{Mat4} digunakan untuk matriks 4x4, \texttt{Vertex} menyimpan posisi
+dan normal, sedangkan \texttt{Mesh} menyimpan daftar vertex hasil pemuatan OBJ,
+titik tengah model, dan skala model.
+
+\begin{lstlisting}[language=C++]
+struct Vertex {
+    Vec3 position;
+    Vec3 normal;
+};
+
+struct Mesh {
+    std::vector<Vertex> vertices;
+    Vec3 center;
+    float scale = 1.0f;
+};
+\end{lstlisting}
+
+Struktur \texttt{Material} dipakai untuk menyimpan properti material Phong:
+ambient, diffuse, specular, dan shininess.
+
+\begin{lstlisting}[language=C++]
+struct Material {
+    Vec3 ambient;
+    Vec3 diffuse;
+    Vec3 specular;
+    float shininess = 32.0f;
+};
+\end{lstlisting}
+
+\subsection{Implementasi Vertex dan Fragment Shader}
+
+Shader ditulis langsung sebagai string GLSL di dalam \texttt{main.cpp}. Shader
+untuk mesh terdiri dari \texttt{kMeshVertexShader} dan
+\texttt{kMeshFragmentShader}. Program mengompilasi shader dengan fungsi
+\texttt{compileShader()} dan menautkannya menjadi program shader dengan
+\texttt{makeProgram()}.
+
+Vertex shader menerima dua atribut utama dari VAO, yaitu posisi vertex dan
+normal vertex.
+
+\begin{lstlisting}[language=C++]
+layout (location = 0) in vec3 aPosition;
+layout (location = 1) in vec3 aNormal;
+\end{lstlisting}
+
+Vertex shader mengubah posisi dari koordinat lokal model menjadi koordinat
+dunia menggunakan \texttt{uModel}, lalu mengubahnya ke clip space memakai
+\texttt{uView} dan \texttt{uProjection}.
+
+\begin{lstlisting}[language=C++]
+vec4 world = uModel * vec4(aPosition, 1.0);
+vWorldPos = world.xyz;
+gl_Position = uProjection * uView * world;
+\end{lstlisting}
+
+Normal vertex dihitung memakai normal matrix:
+
+\begin{lstlisting}[language=C++]
+vNormal = transpose(inverse(mat3(uModel))) * aNormal;
+\end{lstlisting}
+
+Normal matrix digunakan agar arah normal tetap benar ketika model mengalami
+transformasi seperti scaling. Hasil dari vertex shader, yaitu posisi dunia,
+normal, dan tinggi vertex, dikirim ke fragment shader.
+
+\subsection{Implementasi Phong Model}
+
+Fragment shader menerapkan model pencahayaan Phong. Di dalam shader terdapat
+dua struktur GLSL, yaitu \texttt{Material} dan \texttt{Light}. Struktur
+\texttt{Material} berisi karakter permukaan objek, sedangkan struktur
+\texttt{Light} berisi posisi dan warna cahaya.
+
+\begin{lstlisting}[language=C++]
+struct Material {
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
+};
+
+struct Light {
+    vec3 position;
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+};
+\end{lstlisting}
+
+Komponen diffuse dihitung dari dot product antara normal permukaan dan arah
+cahaya. Jika permukaan menghadap cahaya, nilai diffuse akan semakin besar.
+
+\begin{lstlisting}[language=C++]
+float diff = max(dot(n, lightDir), 0.0);
+\end{lstlisting}
+
+Komponen specular dihitung dari arah pandang kamera dan arah pantulan cahaya.
+Nilai \texttt{shininess} menentukan seberapa tajam highlight pada permukaan.
+
+\begin{lstlisting}[language=C++]
+vec3 reflectDir = reflect(-lightDir, n);
+float spec = diff > 0.0
+    ? pow(max(dot(viewDir, reflectDir), 0.0), uMaterial.shininess)
+    : 0.0;
+\end{lstlisting}
+
+Warna akhir objek merupakan gabungan ambient, diffuse, specular, dan sedikit
+rim light statis agar bentuk model lebih mudah terlihat.
+
+\begin{lstlisting}[language=C++]
+vec3 color = ambient + diffuse + specular + rimLight;
+fragColor = vec4(color, 1.0);
+\end{lstlisting}
+
+\subsection{Eksperimen Shader dan Material}
+
+Untuk memenuhi bagian eksperimen vertex dan fragment shader, fragment shader
+diberi variasi warna berdasarkan tinggi vertex. Variasi ini tidak bergerak,
+sehingga scene tetap stabil.
+
+\begin{lstlisting}[language=C++]
+float bands = 0.5 + 0.5 * sin(vHeight * 18.0);
+vec3 patternedDiffuse = uMaterial.diffuse * mix(0.78, 1.18, bands);
+\end{lstlisting}
+
+Program juga menyediakan empat preset material pada \texttt{kMaterials}.
+Material dapat diganti saat program berjalan dengan tombol \texttt{1} sampai
+\texttt{4}. Setiap material memiliki nilai ambient, diffuse, specular, dan
+shininess yang berbeda, sehingga tampilan objek dapat berubah dari material
+kayu, emas, cyan, hingga abu-abu metalik.
+
+\begin{lstlisting}[language=C++]
+static const std::vector<Material> kMaterials = {
+    {{0.18f, 0.08f, 0.03f}, {0.72f, 0.36f, 0.13f}, {0.35f, 0.22f, 0.12f}, 24.0f},
+    {{0.10f, 0.08f, 0.05f}, {0.78f, 0.57f, 0.24f}, {0.95f, 0.82f, 0.45f}, 72.0f},
+    {{0.02f, 0.08f, 0.09f}, {0.05f, 0.55f, 0.62f}, {0.55f, 0.90f, 0.95f}, 96.0f},
+    {{0.04f, 0.04f, 0.045f}, {0.28f, 0.30f, 0.32f}, {0.85f, 0.88f, 0.90f}, 128.0f},
+};
+\end{lstlisting}
+
+Pengiriman material ke shader dilakukan melalui fungsi
+\texttt{setMaterialUniforms()}.
+
+\begin{lstlisting}[language=C++]
+static void setMaterialUniforms(GLuint program, const Material& material) {
+    setVec3Uniform(program, "uMaterial.ambient", material.ambient);
+    setVec3Uniform(program, "uMaterial.diffuse", material.diffuse);
+    setVec3Uniform(program, "uMaterial.specular", material.specular);
+    glUniform1f(glGetUniformLocation(program, "uMaterial.shininess"),
+        material.shininess);
+}
+\end{lstlisting}
+
+\subsection{Fungsi Load Model 3D}
+
+Model 3D dimuat menggunakan fungsi \texttt{loadObj()}. Fungsi ini membuka file
+\texttt{TungTungTungSahur.obj}, membaca file baris demi baris, lalu memproses
+tag OBJ seperti \texttt{v}, \texttt{vn}, dan \texttt{f}.
+
+\begin{itemize}
+    \item \texttt{v}: posisi vertex.
+    \item \texttt{vn}: normal vertex.
+    \item \texttt{f}: face atau sisi model.
+\end{itemize}
+
+Index vertex dan normal diproses oleh fungsi \texttt{parseObjIndex()} dan
+\texttt{parseNormalIndex()}. Face dengan lebih dari tiga vertex dipecah menjadi
+beberapa segitiga menggunakan metode triangle fan.
+
+\begin{lstlisting}[language=C++]
+for (std::size_t i = 1; i + 1 < face.size(); ++i) {
+    std::string tri[3] = {face[0], face[i], face[i + 1]};
+    Vertex out[3];
+    ...
+}
+\end{lstlisting}
+
+Jika model tidak menyediakan normal untuk suatu face, program menghitung normal
+dengan cross product.
+
+\begin{lstlisting}[language=C++]
+Vec3 faceNormal = normalize(cross(
+    out[1].position - out[0].position,
+    out[2].position - out[0].position
+));
+\end{lstlisting}
+
+Selain membuat daftar vertex, loader juga menghitung bounding box model.
+Bounding box digunakan untuk mencari titik tengah dan skala model agar objek
+muncul di tengah scene dengan ukuran yang sesuai.
+
+\begin{lstlisting}[language=C++]
+mesh.center = (minP + maxP) * 0.5f;
+Vec3 extent = maxP - minP;
+float maxExtent = std::max(extent.x, std::max(extent.y, extent.z));
+mesh.scale = maxExtent > 0.0f ? 2.8f / maxExtent : 1.0f;
+\end{lstlisting}
+
+\subsection{Penggunaan VAO dan VBO}
+
+Setelah model dimuat, vertex dari \texttt{mesh.vertices} dikirim ke GPU.
+Program membuat VAO untuk menyimpan konfigurasi atribut vertex dan VBO untuk
+menyimpan data vertex di GPU.
+
+\begin{lstlisting}[language=C++]
+glGenVertexArrays(1, &meshVao);
+glGenBuffers(1, &meshVbo);
+glBindVertexArray(meshVao);
+glBindBuffer(GL_ARRAY_BUFFER, meshVbo);
+glBufferData(GL_ARRAY_BUFFER,
+    static_cast<GLsizeiptr>(mesh.vertices.size() * sizeof(Vertex)),
+    mesh.vertices.data(),
+    GL_STATIC_DRAW);
+\end{lstlisting}
+
+Atribut posisi dikaitkan dengan location 0, sedangkan normal dikaitkan dengan
+location 1. Keduanya sesuai dengan deklarasi input pada vertex shader.
+
+\begin{lstlisting}[language=C++]
+glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+    sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, position)));
+glEnableVertexAttribArray(0);
+
+glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
+    sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, normal)));
+glEnableVertexAttribArray(1);
+\end{lstlisting}
+
+Pada render loop, mesh digambar dengan \texttt{glDrawArrays()}.
+
+\begin{lstlisting}[language=C++]
+glBindVertexArray(meshVao);
+glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.vertices.size()));
+\end{lstlisting}
+
+\subsection{Setup Model, View, dan Projection Matrix}
+
+Program memisahkan transformasi menjadi tiga fungsi. Pemisahan ini membuat
+pipeline grafika lebih jelas: model matrix mengatur objek, view matrix mengatur
+kamera, dan projection matrix mengatur perspektif.
+
+\subsubsection{Model Matrix}
+
+Model matrix dibuat oleh \texttt{makeModelMatrix()}. Fungsi ini memindahkan
+model ke pusat scene dan menerapkan skala dari hasil perhitungan bounding box.
+
+\begin{lstlisting}[language=C++]
+static Mat4 makeModelMatrix(const Mesh& mesh) {
+    return multiply(scale(mesh.scale), translate(mesh.center * -1.0f));
+}
+\end{lstlisting}
+
+\subsubsection{View Matrix}
+
+View matrix dibuat dari posisi kamera dan target. Fungsi
+\texttt{makeViewMatrix()} memanggil \texttt{lookAt()} dengan arah atas
+\texttt{(0, 1, 0)}.
+
+\begin{lstlisting}[language=C++]
+static Mat4 makeViewMatrix(Vec3 camera, Vec3 target) {
+    return lookAt(camera, target, {0.0f, 1.0f, 0.0f});
+}
+\end{lstlisting}
+
+Kamera dapat dikontrol dengan keyboard. Tombol \texttt{A}/\texttt{D} memutar
+kamera, \texttt{W}/\texttt{S} mengatur kemiringan kamera, dan
+\texttt{Q}/\texttt{E} mengatur jarak kamera dari objek.
+
+\subsubsection{Projection Matrix}
+
+Projection matrix dibuat oleh \texttt{makeProjectionMatrix()}. Fungsi ini
+menggunakan perspective projection dengan field of view 45 derajat. Aspect
+ratio dihitung dari ukuran framebuffer agar tampilan tidak terdistorsi ketika
+ukuran window berubah.
+
+\begin{lstlisting}[language=C++]
+static Mat4 makeProjectionMatrix(int width, int height) {
+    float aspect = width > 0 && height > 0
+        ? static_cast<float>(width) / static_cast<float>(height)
+        : 1.0f;
+    return perspective(45.0f * 3.14159265f / 180.0f,
+        aspect, 0.05f, 100.0f);
+}
+\end{lstlisting}
+
+Ketiga matriks tersebut dikirim ke shader sebelum objek digambar.
+
+\begin{lstlisting}[language=C++]
+glUniformMatrix4fv(glGetUniformLocation(meshProgram, "uModel"),
+    1, GL_FALSE, model.m);
+glUniformMatrix4fv(glGetUniformLocation(meshProgram, "uView"),
+    1, GL_FALSE, view.m);
+glUniformMatrix4fv(glGetUniformLocation(meshProgram, "uProjection"),
+    1, GL_FALSE, projection.m);
+\end{lstlisting}
+
+\subsection{Render Loop dan Input}
+
+Render loop berjalan selama window belum ditutup. Setiap frame, program membaca
+input, mengambil ukuran framebuffer, menghitung posisi kamera, membuat matriks
+model/view/projection, membersihkan layar, lalu menggambar ground grid dan
+model. Ground grid dibuat statis, tanpa animasi. Objek juga dibuat stabil,
+tanpa efek beat atau scaling berkala.
+
+Material dipilih melalui tombol \texttt{1} sampai \texttt{4}.
+
+\begin{lstlisting}[language=C++]
+for (int i = 0; i < static_cast<int>(kMaterials.size()); ++i) {
+    if (glfwGetKey(window, GLFW_KEY_1 + i) == GLFW_PRESS) {
+        materialIndex = i;
+    }
+}
+\end{lstlisting}
+
+\section{Screenshot}
+
+Bagian ini disiapkan untuk screenshot dari program yang berjalan dalam beberapa
+konfigurasi. Screenshot akan diisi dari hasil program yang dijalankan secara
+lokal. Jalankan program dengan:
+
+\begin{lstlisting}[language=bash]
+make run
+\end{lstlisting}
+
+Lalu tekan tombol \texttt{1}, \texttt{2}, \texttt{3}, dan \texttt{4} untuk
+mengambil screenshot material yang berbeda. Simpan file screenshot ke folder
+\texttt{screenshots/} dengan nama berikut.
+
+\screenshotfigure{material-1.png}{Program berjalan dengan material preset 1.}{fig:material1}
+\screenshotfigure{material-2.png}{Program berjalan dengan material preset 2.}{fig:material2}
+\screenshotfigure{material-3.png}{Program berjalan dengan material preset 3.}{fig:material3}
+\screenshotfigure{material-4.png}{Program berjalan dengan material preset 4.}{fig:material4}
+
+\section{Kesimpulan}
+
+Program telah memenuhi tiga kebutuhan utama pada tugas. Vertex shader dan
+fragment shader sudah dibuat dengan model pencahayaan Phong. Objek 3D dimuat
+dari file OBJ dan dikirim ke GPU menggunakan VAO serta VBO. Transformasi scene
+juga sudah dipisahkan menjadi model matrix, view matrix, dan projection matrix.
+Selain itu, program menyediakan beberapa material yang dapat diganti saat
+runtime, sehingga konfigurasi tampilan objek dapat dibandingkan melalui
+screenshot.
+
+\end{document}
