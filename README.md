@@ -3,6 +3,7 @@
 An interactive C++ OpenGL program for viewing and manipulating the `TungTungTungSahur.obj` 3D model.
 This project demonstrates core OpenGL concepts including model loading, VAO/VBO usage, matrix transformations,
 and Phong shading with multiple material presets.
+The model uses UV coordinates from the OBJ file and samples `texture.png` for its surface texture.
 
 ## Table of Contents
 - [Features](#features)
@@ -18,6 +19,7 @@ and Phong shading with multiple material presets.
 ## Features
 
 - Loads and displays a 3D model from an OBJ file (`TungTungTungSahur.obj`)
+- Loads and applies `texture.png` using the OBJ texture coordinates
 - Uses Vertex Array Objects (VAO) and Vertex Buffer Objects (VBO) for efficient GPU rendering
 - Implements separate model, view, and projection matrix transformations
 - Phong lighting model with ambient, diffuse, and specular components
@@ -59,7 +61,7 @@ This will compile the source and produce an executable named `tung_tung_sahur`.
 
 ### Running
 
-Run the executable from the project root directory (where `TungTungTungSahur.obj` is located):
+Run the executable from the project root directory, where `TungTungTungSahur.obj` and `texture.png` are located:
 
 ```bash
 make run
@@ -67,7 +69,7 @@ make run
 ./tung_tung_sahur
 ```
 
-Ensure the OBJ file is in the same directory as the executable, or adjust the path in `src/main.cpp`.
+Ensure the OBJ and PNG texture files are in the same directory as the executable, or adjust the paths in `src/main.cpp`.
 
 ## Controls
 
@@ -90,12 +92,14 @@ Ensure the OBJ file is in the same directory as the executable, or adjust the pa
 
 ### Core Components
 
-- **Math Structures**: Custom `Vec3` and `Mat4` classes for vector and matrix operations.
-- **Model Loading**: `loadObj()` function parses OBJ files, extracts vertices and normals, computes model center and scale.
+- **Math Structures**: Custom `Vec2`, `Vec3`, and `Mat4` classes for vector and matrix operations.
+- **Model Loading**: `loadObj()` function parses OBJ files, extracts vertices, normals, and texture coordinates, then computes model center and scale.
+- **Texture Loading**: `loadTexture()` loads `texture.png` through stb_image and uploads it as an OpenGL 2D texture.
 - **Shaders**:
-  - Vertex Shader: Transforms vertices using model/view/projection matrices, passes world position, normal, and height to fragment shader.
+  - Vertex Shader: Transforms vertices using model/view/projection matrices, passes world position, normal, UV, and height to fragment shader.
   - Fragment Shader: Implements Phong lighting with:
     - Ambient, diffuse, and specular components
+    - Texture sampling from `texture.png`
     - Rim lighting effect
     - Height-based patterned diffuse (sinusoidal bands)
 - **Rendering**:
@@ -108,6 +112,8 @@ Ensure the OBJ file is in the same directory as the executable, or adjust the pa
 
 - `src/main.cpp`: Contains all application logic (model loading, shaders, rendering loop, input handling).
 - `TungTungTungSahur.obj`: The 3D model file (over 1MB, not shown in repo if large).
+- `texture.png`: Texture image sampled by the mesh shader.
+- `src/stb_image.h`: Header-only image loader used for PNG loading.
 - `Makefile`: Simple build script using g++ with GLFW and GLEW linking.
 - `report.*`: LaTeX-generated documentation (likely from an academic assignment).
 

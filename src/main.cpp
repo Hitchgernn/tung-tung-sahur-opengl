@@ -11,6 +11,14 @@
 #include <string>
 #include <vector>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+struct Vec2 {
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
 struct Vec3 {
     float x = 0.0f;
     float y = 0.0f;
@@ -24,6 +32,7 @@ struct Mat4 {
 struct Vertex {
     Vec3 position;
     Vec3 normal;
+    Vec2 texcoord;
 };
 
 struct Mesh {
@@ -170,6 +179,22 @@ static int parseNormalIndex(const std::string& token) {
     return std::stoi(token.substr(second + 1)) - 1;
 }
 
+static int parseTexcoordIndex(const std::string& token) {
+    std::size_t first = token.find('/');
+    if (first == std::string::npos || first + 1 >= token.size()) {
+        return -1;
+    }
+
+    std::size_t second = token.find('/', first + 1);
+    std::string value = second == std::string::npos
+        ? token.substr(first + 1)
+        : token.substr(first + 1, second - first - 1);
+    if (value.empty()) {
+        return -1;
+    }
+    return std::stoi(value) - 1;
+}
+
 static Mesh loadObj(const std::string& path) {
     std::ifstream file(path);
     if (!file) {
@@ -177,6 +202,7 @@ static Mesh loadObj(const std::string& path) {
     }
 
     std::vector<Vec3> positions;
+    std::vector<Vec2> texcoords;
     std::vector<Vec3> normals;
     Mesh mesh;
 
@@ -198,6 +224,10 @@ static Mesh loadObj(const std::string& path) {
             Vec3 n;
             in >> n.x >> n.y >> n.z;
             normals.push_back(normalize(n));
+        } else if (tag == "vt") {
+            Vec2 uv;
+            in >> uv.x >> uv.y;
+            texcoords.push_back(uv);
         } else if (tag == "f") {
             std::vector<std::string> face;
             std::string token;
@@ -210,12 +240,14 @@ static Mesh loadObj(const std::string& path) {
                 Vertex out[3];
                 for (int j = 0; j < 3; ++j) {
                     int pi = parseObjIndex(tri[j]);
+                    int ti = parseTexcoordIndex(tri[j]);
                     int ni = parseNormalIndex(tri[j]);
                     if (pi < 0 || pi >= static_cast<int>(positions.size())) {
                         throw std::runtime_error("OBJ face references an invalid vertex");
                     }
                     out[j].position = positions[pi];
                     out[j].normal = (ni >= 0 && ni < static_cast<int>(normals.size())) ? normals[ni] : Vec3{};
+                    out[j].texcoord = (ti >= 0 && ti < static_cast<int>(texcoords.size())) ? texcoords[ti] : Vec2{};
                 }
 
                 Vec3 faceNormal = normalize(cross(out[1].position - out[0].position, out[2].position - out[0].position));
@@ -271,10 +303,34 @@ static GLuint makeProgram(const char* vertexSource, const char* fragmentSource) 
     return program;
 }
 
+static GLuint loadTexture(const std::string& path) {
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
+    if (!pixels) {
+        throw std::runtime_error("Unable to load texture " + path + ": " + stbi_failure_reason());
+    }
+
+    GLuint texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    stbi_image_free(pixels);
+    return texture;
+}
+
 static const char* kMeshVertexShader = R"GLSL(
 #version 330 core
 layout (location = 0) in vec3 aPosition;
 layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTexcoord;
 
 uniform mat4 uModel;
 uniform mat4 uView;
@@ -282,12 +338,14 @@ uniform mat4 uProjection;
 
 out vec3 vWorldPos;
 out vec3 vNormal;
+out vec2 vTexcoord;
 out float vHeight;
 
 void main() {
     vec4 world = uModel * vec4(aPosition, 1.0);
     vWorldPos = world.xyz;
     vNormal = transpose(inverse(mat3(uModel))) * aNormal;
+    vTexcoord = aTexcoord;
     vHeight = aPosition.y;
     gl_Position = uProjection * uView * world;
 }
@@ -311,11 +369,13 @@ struct Light {
 
 in vec3 vWorldPos;
 in vec3 vNormal;
+in vec2 vTexcoord;
 in float vHeight;
 
 uniform vec3 uCameraPos;
 uniform Material uMaterial;
 uniform Light uLight;
+uniform sampler2D uTexture;
 
 out vec4 fragColor;
 
@@ -330,7 +390,9 @@ void main() {
     float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 2.0);
 
     float bands = 0.5 + 0.5 * sin(vHeight * 18.0);
-    vec3 patternedDiffuse = uMaterial.diffuse * mix(0.78, 1.18, bands);
+    vec4 texel = texture(uTexture, vTexcoord);
+    vec3 texturedDiffuse = texel.rgb * uMaterial.diffuse;
+    vec3 patternedDiffuse = texturedDiffuse * mix(0.86, 1.10, bands);
 
     vec3 ambient = uLight.ambient * uMaterial.ambient;
     vec3 diffuse = uLight.diffuse * diff * patternedDiffuse;
@@ -338,7 +400,7 @@ void main() {
     vec3 rimLight = uMaterial.specular * rim * 0.10;
 
     vec3 color = ambient + diffuse + specular + rimLight;
-    fragColor = vec4(color, 1.0);
+    fragColor = vec4(color, texel.a);
 }
 )GLSL";
 
@@ -469,6 +531,10 @@ int main() {
 
         GLuint meshProgram = makeProgram(kMeshVertexShader, kMeshFragmentShader);
         GLuint lineProgram = makeProgram(kLineVertexShader, kLineFragmentShader);
+        GLuint meshTexture = loadTexture("texture.png");
+
+        glUseProgram(meshProgram);
+        glUniform1i(glGetUniformLocation(meshProgram, "uTexture"), 0);
 
         GLuint meshVao = 0;
         GLuint meshVbo = 0;
@@ -481,6 +547,8 @@ int main() {
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, normal)));
         glEnableVertexAttribArray(1);
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, texcoord)));
+        glEnableVertexAttribArray(2);
 
         std::vector<Vec3> grid = makeGrid();
         GLuint gridVao = 0;
@@ -543,6 +611,8 @@ int main() {
             setVec3Uniform(meshProgram, "uCameraPos", camera);
             setMaterialUniforms(meshProgram, kMaterials[materialIndex]);
             setLightUniforms(meshProgram);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, meshTexture);
             glBindVertexArray(meshVao);
             glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.vertices.size()));
 
@@ -552,6 +622,7 @@ int main() {
 
         glDeleteBuffers(1, &meshVbo);
         glDeleteVertexArrays(1, &meshVao);
+        glDeleteTextures(1, &meshTexture);
         glDeleteBuffers(1, &gridVbo);
         glDeleteVertexArrays(1, &gridVao);
         glDeleteProgram(meshProgram);
