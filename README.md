@@ -85,6 +85,7 @@ Ensure the OBJ and PNG texture files are in the same directory as the executable
 | `2` | Material preset 2 (yellow/gold) |
 | `3` | Material preset 3 (blue/cyan) |
 | `4` | Material preset 4 (gray/blue) |
+| `5` | Cycle light position (right side) |
 | `R` | Reset camera to default position |
 | `Esc` | Exit the application |
 

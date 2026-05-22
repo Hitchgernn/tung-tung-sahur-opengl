@@ -458,14 +458,19 @@ static void setMaterialUniforms(GLuint program, const Material& material) {
     glUniform1f(glGetUniformLocation(program, "uMaterial.shininess"), material.shininess);
 }
 
-static void setLightUniforms(GLuint program) {
-    setVec3Uniform(program, "uLight.position", {-2.8f, 3.6f, 3.2f});
+static const std::vector<Vec3> kLightPositions = {
+    {-2.8f, 3.6f, 3.2f},  // default
+    {3.2f, 3.6f, -2.8f},  // right
+};
+
+static void setLightUniforms(GLuint program, int lightIndex = 0) {
+    setVec3Uniform(program, "uLight.position", kLightPositions[lightIndex]);
     setVec3Uniform(program, "uLight.ambient", {0.30f, 0.30f, 0.32f});
     setVec3Uniform(program, "uLight.diffuse", {0.92f, 0.88f, 0.80f});
     setVec3Uniform(program, "uLight.specular", {1.0f, 0.96f, 0.88f});
 }
 
-static void handleInput(GLFWwindow* window, float dt, float& yaw, float& pitch, float& distance, int& materialIndex) {
+static void handleInput(GLFWwindow* window, float dt, float& yaw, float& pitch, float& distance, int& materialIndex, int& lightIndex) {
     float orbitSpeed = 1.6f * dt;
     float zoomSpeed = 2.0f * dt;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) yaw -= orbitSpeed;
@@ -484,6 +489,10 @@ static void handleInput(GLFWwindow* window, float dt, float& yaw, float& pitch, 
         if (glfwGetKey(window, GLFW_KEY_1 + i) == GLFW_PRESS) {
             materialIndex = i;
         }
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS) {
+        lightIndex = (lightIndex + 1) % static_cast<int>(kLightPositions.size());
     }
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
@@ -571,13 +580,14 @@ int main() {
         float pitch = 0.38f;
         float distance = 5.4f;
         int materialIndex = 0;
+        int lightIndex = 0;
         double previous = glfwGetTime();
 
         while (!glfwWindowShouldClose(window)) {
             double now = glfwGetTime();
             float dt = static_cast<float>(now - previous);
             previous = now;
-            handleInput(window, dt, yaw, pitch, distance, materialIndex);
+            handleInput(window, dt, yaw, pitch, distance, materialIndex, lightIndex);
 
             int width = 0;
             int height = 0;
@@ -610,7 +620,7 @@ int main() {
             glUniformMatrix4fv(glGetUniformLocation(meshProgram, "uProjection"), 1, GL_FALSE, projection.m);
             setVec3Uniform(meshProgram, "uCameraPos", camera);
             setMaterialUniforms(meshProgram, kMaterials[materialIndex]);
-            setLightUniforms(meshProgram);
+            setLightUniforms(meshProgram, lightIndex);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, meshTexture);
             glBindVertexArray(meshVao);
