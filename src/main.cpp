@@ -461,6 +461,7 @@ static void setMaterialUniforms(GLuint program, const Material& material) {
 static const std::vector<Vec3> kLightPositions = {
     {-2.8f, 3.6f, 3.2f},  // default
     {3.2f, 3.6f, -2.8f},  // right
+    {-3.2f, 3.6f, 2.8f},  // left
 };
 
 static void setLightUniforms(GLuint program, int lightIndex = 0) {
@@ -492,7 +493,10 @@ static void handleInput(GLFWwindow* window, float dt, float& yaw, float& pitch, 
     }
 
     if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS) {
-        lightIndex = (lightIndex + 1) % static_cast<int>(kLightPositions.size());
+        lightIndex = 1;  // right light
+    }
+    if (glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS) {
+        lightIndex = 2;  // left light
     }
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
